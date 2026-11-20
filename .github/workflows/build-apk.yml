@@ -34,8 +34,8 @@ jobs:
           flutter create --platforms=android --org com.tadabburpocket .
 
       - name: ⚙️ Configure Android build & permissions
+        shell: python
         run: |
-          python3 - << 'EOF'
           import os, re
 
           # 1. Konfigurasi build.gradle.kts / build.gradle
@@ -89,30 +89,31 @@ jobs:
           manifest = re.sub(r'android:label="[^"]*"', 'android:label="Tadabbur Pocket"', manifest)
 
           # Tambahkan permissions yang dibutuhkan aplikasi & flutter_local_notifications
-          permissions = '''
-    <uses-permission android:name="android.permission.INTERNET"/>
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-    <uses-permission android:name="android.permission.VIBRATE"/>
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
-'''
+          permissions = (
+              '\n    <uses-permission android:name="android.permission.INTERNET"/>'
+              '\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>'
+              '\n    <uses-permission android:name="android.permission.VIBRATE"/>'
+              '\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>'
+              '\n    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>\n'
+          )
 
           if 'android.permission.INTERNET' not in manifest:
               manifest = re.sub(r'(<manifest[^>]*>)', lambda m: m.group(1) + permissions, manifest, count=1)
 
           # Tambahkan broadcast receivers untuk pengingat murajaah flutter_local_notifications
-          receivers = '''
-        <!-- Receivers for flutter_local_notifications scheduled alarms -->
-        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
-        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED"/>
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
-            </intent-filter>
-        </receiver>
-    </application>'''
+          receivers = (
+              '\n        <!-- Receivers for flutter_local_notifications scheduled alarms -->'
+              '\n        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />'
+              '\n        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">'
+              '\n            <intent-filter>'
+              '\n                <action android:name="android.intent.action.BOOT_COMPLETED"/>'
+              '\n                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>'
+              '\n                <action android:name="android.intent.action.QUICKBOOT_POWERON" />'
+              '\n                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />'
+              '\n            </intent-filter>'
+              '\n        </receiver>'
+              '\n    </application>'
+          )
 
           if 'ScheduledNotificationReceiver' not in manifest:
               manifest = manifest.replace('</application>', receivers, 1)
@@ -121,7 +122,6 @@ jobs:
               f.write(manifest)
 
           print("Konfigurasi Android build dan manifest selesai dengan sukses.")
-          EOF
 
       - name: 📦 Install Flutter dependencies
         run: |
