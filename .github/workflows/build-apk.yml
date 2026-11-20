@@ -29,9 +29,99 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: 🛠️ Ensure Android platform scaffolding exists
+      - name: 🛠️ Generate Android platform scaffolding
         run: |
-          flutter create --platforms=android .
+          flutter create --platforms=android --org com.tadabburpocket .
+
+      - name: ⚙️ Configure Android build & permissions
+        run: |
+          python3 - << 'EOF'
+          import os, re
+
+          # 1. Konfigurasi build.gradle.kts / build.gradle
+          gradle_file = 'android/app/build.gradle.kts' if os.path.exists('android/app/build.gradle.kts') else 'android/app/build.gradle'
+          is_kts = gradle_file.endswith('.kts')
+          print(f"Mengonfigurasi {gradle_file} (is_kts={is_kts})")
+
+          with open(gradle_file, 'r', encoding='utf-8') as f:
+              gradle = f.read()
+
+          # Aktifkan coreLibraryDesugaring di compileOptions
+          if is_kts:
+              if 'isCoreLibraryDesugaringEnabled' not in gradle:
+                  gradle = gradle.replace(
+                      'compileOptions {',
+                      'compileOptions {\n        isCoreLibraryDesugaringEnabled = true',
+                      1
+                  )
+          else:
+              if 'coreLibraryDesugaringEnabled' not in gradle:
+                  gradle = gradle.replace(
+                      'compileOptions {',
+                      'compileOptions {\n        coreLibraryDesugaringEnabled = true',
+                      1
+                  )
+
+          # Tambahkan dependensi desugar_jdk_libs
+          desugar_dep = '    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")' if is_kts else "    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'"
+
+          if 'dependencies {' in gradle:
+              if 'desugar_jdk_libs' not in gradle:
+                  gradle = gradle.replace(
+                      'dependencies {',
+                      f'dependencies {{\n{desugar_dep}',
+                      1
+                  )
+          else:
+              gradle += f'\n\ndependencies {{\n{desugar_dep}\n}}\n'
+
+          with open(gradle_file, 'w', encoding='utf-8') as f:
+              f.write(gradle)
+
+          # 2. Konfigurasi AndroidManifest.xml
+          manifest_file = 'android/app/src/main/AndroidManifest.xml'
+          print(f"Mengonfigurasi {manifest_file}")
+
+          with open(manifest_file, 'r', encoding='utf-8') as f:
+              manifest = f.read()
+
+          # Perbarui label aplikasi menjadi Tadabbur Pocket
+          manifest = re.sub(r'android:label="[^"]*"', 'android:label="Tadabbur Pocket"', manifest)
+
+          # Tambahkan permissions yang dibutuhkan aplikasi & flutter_local_notifications
+          permissions = '''
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+'''
+
+          if 'android.permission.INTERNET' not in manifest:
+              manifest = re.sub(r'(<manifest[^>]*>)', lambda m: m.group(1) + permissions, manifest, count=1)
+
+          # Tambahkan broadcast receivers untuk pengingat murajaah flutter_local_notifications
+          receivers = '''
+        <!-- Receivers for flutter_local_notifications scheduled alarms -->
+        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+    </application>'''
+
+          if 'ScheduledNotificationReceiver' not in manifest:
+              manifest = manifest.replace('</application>', receivers, 1)
+
+          with open(manifest_file, 'w', encoding='utf-8') as f:
+              f.write(manifest)
+
+          print("Konfigurasi Android build dan manifest selesai dengan sukses.")
+          EOF
 
       - name: 📦 Install Flutter dependencies
         run: |
